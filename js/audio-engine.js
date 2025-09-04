@@ -226,7 +226,7 @@ class AudioEngine {
     }
 }
 
-// Export for module systems or attach to window for classic scripts
+// Export for module systems or attach to a window for classic scripts
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = AudioEngine;
 } else {
