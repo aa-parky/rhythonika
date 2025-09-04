@@ -1,6 +1,7 @@
 // js/rhythonika.js
 // Tonika module: Rhythonika (smart metronome w/ patterns)
 // BEM root: .rhythonika (inside .tonika-module)
+// Updated with AudioEngine integration
 
 class Rhythonika {
     constructor(opts = {}) {
@@ -14,6 +15,7 @@ class Rhythonika {
         this.currentStep = 0;
         this.intervalId = null;
         this.audioContext = null;
+        this.audioEngine = null; // NEW: AudioEngine instance
         this.nextNoteTime = 0.0;
         this.lookahead = 25.0;         // ms (UI timer)
         this.scheduleAheadTime = 0.1;  // seconds (audio clock window)
@@ -88,6 +90,25 @@ class Rhythonika {
         </div>
       </div>
 
+      <div class="rhythonika__audio-controls">
+        <div class="rhythonika__field">
+          <label class="rhythonika__label">Sound</label>
+          <select class="tonika-select rhythonika__sound-mode">
+            <option value="clicks">Click Sounds</option>
+            <option value="samples">Drum Samples</option>
+          </select>
+        </div>
+        
+        <div class="rhythonika__field">
+          <label class="rhythonika__label">Volume</label>
+          <input class="tonika-input rhythonika__volume" type="range" min="0" max="1" step="0.1" value="0.7" />
+        </div>
+        
+        <div class="rhythonika__status">
+          <span class="rhythonika__status-text"></span>
+        </div>
+      </div>
+
       <div class="rhythonika__meter">
         <div class="rhythonika__pills" aria-label="Rhythm pattern pills"></div>
         <div class="rhythonika__legend tonika-text-muted"></div>
@@ -119,6 +140,11 @@ class Rhythonika {
         this.pillsWrap     = this.root.querySelector(".rhythonika__pills");
         this.legend        = this.root.querySelector(".rhythonika__legend");
 
+        // NEW: Audio control elements
+        this.selectSoundMode = this.root.querySelector(".rhythonika__sound-mode");
+        this.inputVolume     = this.root.querySelector(".rhythonika__volume");
+        this.statusText      = this.root.querySelector(".rhythonika__status-text");
+
         this.btnStartStop.addEventListener("click", () => this.isPlaying ? this.stop() : this.start());
 
         this.inputBpm.addEventListener("change", () => {
@@ -145,6 +171,26 @@ class Rhythonika {
             if (this.isPlaying) this._reprimeClock();
         });
 
+        // NEW: Audio control handlers
+        this.selectSoundMode.addEventListener("change", async () => {
+            if (this.audioEngine) {
+                this._updateStatus("Loading...");
+                try {
+                    await this.audioEngine.setSoundMode(this.selectSoundMode.value);
+                    this._updateStatus(this.selectSoundMode.value === 'samples' ? "Samples loaded" : "Click sounds");
+                } catch (error) {
+                    console.error("Failed to change sound mode:", error);
+                    this._updateStatus("Error loading samples");
+                }
+            }
+        });
+
+        this.inputVolume.addEventListener("input", () => {
+            if (this.audioEngine) {
+                this.audioEngine.setVolume(parseFloat(this.inputVolume.value));
+            }
+        });
+
         // Space toggles transport for quick UX
         this._keyHandler = (e) => {
             if (e.code === "Space") {
@@ -153,6 +199,26 @@ class Rhythonika {
             }
         };
         window.addEventListener("keydown", this._keyHandler);
+
+        // Initialize audio controls UI
+        this._initAudioUI();
+    }
+
+    // NEW: Initialize audio control UI state
+    _initAudioUI() {
+        // Set initial sound mode selection
+        if (this.audioEngine) {
+            this.selectSoundMode.value = this.audioEngine.getSoundMode();
+            this.inputVolume.value = this.audioEngine.getVolume();
+            this._updateStatus(this.audioEngine.getSoundMode() === 'samples' ? "Ready" : "Click sounds");
+        }
+    }
+
+    // NEW: Update status text
+    _updateStatus(text) {
+        if (this.statusText) {
+            this.statusText.textContent = text;
+        }
     }
 
     // ---------- Pills (visual pattern) ----------
@@ -204,8 +270,15 @@ class Rhythonika {
     }
 
     // ---------- Audio scheduling ----------
-    start() {
-        this.audioContext = this.audioContext || new (window.AudioContext || window.webkitAudioContext)();
+    async start() {
+        // Initialize audio context and engine if needed
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.audioEngine = new AudioEngine(this.audioContext);
+            await this.audioEngine.init();
+            this._initAudioUI();
+        }
+
         this.isPlaying = true;
         this.root.classList.add("rhythonika--playing");
         this.btnStartStop.textContent = "Stop";
@@ -251,12 +324,15 @@ class Rhythonika {
 
         if (pat.kind === "grid") {
             // Derive slot duration based on time signature
-            // (Assumes denominator=4 behaves as "beats are quarter-notes")
             const beatsPerBar = this.timeSignature.numerator;
             const slotDur = (beatsPerBar / pat.slotsPerBar) * secondsPerBeat;
 
             const isAccent = !!pat.accents[this.currentStep % pat.slotsPerBar];
-            this._scheduleClick(this.nextNoteTime, isAccent ? 2000 : 1000, isAccent ? 0.28 : 0.18, 0.05);
+
+            // NEW: Use AudioEngine instead of direct scheduling
+            const soundType = isAccent ? 'accent' : 'normal';
+            const velocity = isAccent ? 1.0 : 0.7;
+            this.audioEngine.scheduleSound(this.nextNoteTime, soundType, velocity);
 
             this.nextNoteTime += slotDur;
             this.currentStep = (this.currentStep + 1) % pat.slotsPerBar;
@@ -266,43 +342,22 @@ class Rhythonika {
             const beatsPerBar = this.timeSignature.numerator;
             const barDur = beatsPerBar * secondsPerBeat;
 
-            // We schedule the *next* composite step by taking the least common multiple grid
-            // For 3:2 the LCM is 6 "ticks"
             const lcmTicks = this._lcm(pat.gridA.count, pat.gridB.count);
             const tickDur = barDur / lcmTicks;
-
-            // Which tick are we on?
             const tick = this.currentStep % lcmTicks;
 
-            // If tick aligns with A grid
+            // If tick aligns with A grid (use kick sound)
             if (tick % (lcmTicks / pat.gridA.count) === 0) {
-                this._scheduleClick(this.nextNoteTime, pat.gridA.freq, pat.gridA.gain, 0.06);
+                this.audioEngine.scheduleSound(this.nextNoteTime, 'kick', pat.gridA.gain / 0.28);
             }
-            // If tick aligns with B grid
+            // If tick aligns with B grid (use snare sound)
             if (tick % (lcmTicks / pat.gridB.count) === 0) {
-                this._scheduleClick(this.nextNoteTime, pat.gridB.freq, pat.gridB.gain, 0.05);
+                this.audioEngine.scheduleSound(this.nextNoteTime, 'snare', pat.gridB.gain / 0.28);
             }
 
             this.nextNoteTime += tickDur;
             this.currentStep = (this.currentStep + 1) % lcmTicks;
         }
-    }
-
-    _scheduleClick(time, freq = 1000, gainLevel = 0.18, length = 0.05) {
-        const ctx = this.audioContext;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "square";
-        osc.frequency.setValueAtTime(freq, time);
-
-        // fast tick envelope
-        gain.gain.setValueAtTime(0.001, time);
-        gain.gain.exponentialRampToValueAtTime(gainLevel, time + 0.002);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + length);
-
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + length + 0.01);
     }
 
     _lcm(a, b) {
@@ -314,6 +369,12 @@ class Rhythonika {
     destroy() {
         this.stop();
         window.removeEventListener("keydown", this._keyHandler);
+
+        // NEW: Cleanup audio engine
+        if (this.audioEngine) {
+            this.audioEngine.destroy();
+        }
+
         if (this.audioContext && this.audioContext.state !== "closed") {
             this.audioContext.close();
         }
@@ -326,3 +387,4 @@ class Rhythonika {
 // Attach to a Tonika registry on window for classic scripts
 window.TonikaModules = window.TonikaModules || {};
 window.TonikaModules.Rhythonika = Rhythonika;
+

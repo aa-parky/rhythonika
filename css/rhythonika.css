@@ -1,3 +1,5 @@
+/* noinspection CssUnresolvedCustomProperty */
+
 /* css/rhythonika.css */
 .rhythonika { display: flex; flex-direction: column; gap: var(--spacing-md); }
 .rhythonika__header { display: flex; flex-direction: column; gap: 2px; }
@@ -6,6 +8,35 @@
 .rhythonika__field { display: flex; flex-direction: column; gap: 4px; min-width: 100px; }
 .rhythonika__field--grow { flex: 1; }
 .rhythonika__transport { margin-left: auto; }
+
+/* NEW: Audio controls section */
+.rhythonika__audio-controls {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: end;
+    flex-wrap: wrap;
+    padding: var(--spacing-sm);
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius-md);
+    border: var(--border-width) solid var(--color-border);
+}
+
+.rhythonika__status {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+}
+
+.rhythonika__status-text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.rhythonika__volume {
+    min-width: 80px;
+}
+
 .rhythonika__meter { display: flex; flex-direction: column; gap: var(--spacing-sm); }
 .rhythonika__pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .rhythonika__pill { width: 16px; height: 16px; border-radius: var(--border-radius-sm); border: var(--border-width) solid var(--color-border); background: var(--color-bg-secondary); opacity: 0.9; }
@@ -15,3 +46,4 @@
 .rhythonika__polydot { width: 10px; height: 10px; border-radius: 999px; background: var(--color-border); }
 .rhythonika__polydot--a { background: var(--color-accent); }
 .rhythonika__polydot--b { background: var(--color-text-muted); }
+
