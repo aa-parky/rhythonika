@@ -148,8 +148,7 @@ class Rhythonika {
         this.btnStartStop.addEventListener("click", () => this.isPlaying ? this.stop() : this.start());
 
         this.inputBpm.addEventListener("change", () => {
-            const val = Math.max(20, Math.min(400, Number(this.inputBpm.value) || 120));
-            this.bpm = val;
+            this.bpm = Math.max(20, Math.min(400, Number(this.inputBpm.value) || 120));
             localStorage.setItem("rhyth_bpm", String(this.bpm));
             if (this.isPlaying) this._reprimeClock();
         });
@@ -242,7 +241,7 @@ class Rhythonika {
             this.legend.textContent = `${pat.name} • ${pat.slotsPerBar} slots`;
         } else {
             // Polyrhythm legend only (no single grid pills)
-            // Show a minimal dual-row hint
+            // Shows a minimal dual-row hint
             const rowA = document.createElement("div");
             rowA.className = "rhythonika__polyrow";
             const rowB = document.createElement("div");
@@ -270,6 +269,7 @@ class Rhythonika {
     }
 
     // ---------- Audio scheduling ----------
+    webkitAudioContext;
     async start() {
         // Initialize audio context and engine if needed
         if (!this.audioContext) {
@@ -366,22 +366,6 @@ class Rhythonika {
     }
 
     // ---------- Lifecycle ----------
-    destroy() {
-        this.stop();
-        window.removeEventListener("keydown", this._keyHandler);
-
-        // NEW: Cleanup audio engine
-        if (this.audioEngine) {
-            this.audioEngine.destroy();
-        }
-
-        if (this.audioContext && this.audioContext.state !== "closed") {
-            this.audioContext.close();
-        }
-        if (this.root && this.root.parentNode) {
-            this.root.parentNode.removeChild(this.root);
-        }
-    }
 }
 
 // Attach to a Tonika registry on window for classic scripts
