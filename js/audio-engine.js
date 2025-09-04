@@ -220,9 +220,6 @@ class AudioEngine {
         return this.volume;
     }
 
-    // Check if samples are loaded
-// Get loading status
-// Cleanup
 }
 
 // Export for browser globals
