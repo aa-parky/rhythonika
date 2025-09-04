@@ -4,7 +4,7 @@
 .rhythonika { display: flex; flex-direction: column; gap: var(--spacing-md); }
 .rhythonika__header { display: flex; flex-direction: column; gap: 2px; }
 .rhythonika__title { font-weight: 700; }
-.rhythonika__controls { display: flex; gap: var(--spacing-sm); align-items: end; flex-wrap: wrap; }
+.rhythonika__controls { display: flex; gap: var(--spacing-sm); align-items: end; flex-wrap: wrap; width: 520px;}
 .rhythonika__field { display: flex; flex-direction: column; gap: 4px; min-width: 100px; }
 .rhythonika__field--grow { flex: 1; }
 .rhythonika__transport { margin-left: auto; }
@@ -19,6 +19,7 @@
     background: var(--color-bg-secondary);
     border-radius: var(--border-radius-md);
     border: var(--border-width) solid var(--color-border);
+    width: 500px;
 }
 
 .rhythonika__status {
