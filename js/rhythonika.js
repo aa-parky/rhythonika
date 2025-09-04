@@ -323,5 +323,6 @@ class Rhythonika {
     }
 }
 
-// Keep your existing initialization in rhythonika.html working:
-const Demo = Rhythonika;
+// Attach to a Tonika registry on window for classic scripts
+window.TonikaModules = window.TonikaModules || {};
+window.TonikaModules.Rhythonika = Rhythonika;
