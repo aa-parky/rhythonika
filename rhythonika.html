@@ -15,7 +15,6 @@
   - Development documentation
   - Proper Tonika design system integration
 
-  FOR PRODUCTION: You only need Tab 1 content and can remove all demo sections.
   ===================================================================
 -->
 <!--suppress JSUnresolvedLibraryURL -->
@@ -72,16 +71,11 @@
         /* ===================================================================
            DEMO-SPECIFIC STYLES
 
-           These styles are ONLY for the development demo environment.
-           They are NOT part of the Tonika design system and should be
-           REMOVED when integrating your module into production.
-
            PURPOSE:
            - Style the demo information boxes
            - Layout the component gallery
            - Create development-friendly layouts
 
-           PRODUCTION: Delete this entire <style> block when going live.
            ================================================================== */
 
         /* Information boxes used throughout the demo */
@@ -141,7 +135,7 @@
      be part of your main application layout.
      ================================================================== -->
 <header>
-    <h1>Tonika Module Development Demo</h1>
+    <h1>Rhythonika Module Development Demo</h1>
 </header>
 
 <main class="tonika-container">
@@ -169,10 +163,9 @@
          Tab 4: Layout Test        → Test how your module looks in different layouts
          Tab 5: Documentation      → Development guidelines and best practices
 
-         PRODUCTION: Only keep Tab 1 content, remove the rest.
          ================================================================== -->
     <div class="tabs">
-        <button class="active" onclick="openTab(0)">Your Module</button>
+        <button class="active" onclick="openTab(0)">Rhythonika</button>
         <button onclick="openTab(1)">Light Theme Test</button>
         <button onclick="openTab(2)">Component Gallery</button>
         <button onclick="openTab(3)">Layout Test</button>
@@ -186,6 +179,9 @@
              This is where your module will be rendered during development.
              The #demo-mount div is where your JavaScript will inject your
              module's HTML content.
+
+             Replace "demo.js" with your actual module filename (e.g.,
+             "chordonika.js", "catchonika.js").
 
              PRODUCTION: This is the only tab content you need to keep.
              ================================================================== -->
@@ -203,7 +199,6 @@
              IMPORTANT: Always test your module in both themes to ensure
              proper contrast and readability.
 
-             PRODUCTION: Remove this entire section.
              ================================================================== -->
         <section>
             <div class="demo-note">
@@ -216,8 +211,7 @@
                     Toggle Theme
                 </button>
             </div>
-            <!-- Second instance of your module for theme testing -->
-            <div id="theme-test-mount"></div>
+
         </section>
 
         <!-- ===================================================================
@@ -233,7 +227,6 @@
              - .tonika-select (dropdown selects)
              - .tonika-module (container for modules)
 
-             PRODUCTION: Remove this entire section.
              ================================================================== -->
         <section>
             <h3>Tonika Component Gallery</h3>
@@ -294,7 +287,6 @@
              other modules in different layout configurations. Use this to
              ensure your module plays well with others.
 
-             PRODUCTION: Remove this entire section.
              ================================================================== -->
         <section>
             <h3>Layout Test</h3>
@@ -318,7 +310,6 @@
              This tab provides development guidelines and best practices for
              creating Tonika modules. Keep this as a reference during development.
 
-             PRODUCTION: Remove this entire section.
              ================================================================== -->
         <section>
             <div class="tonika-module">
@@ -377,7 +368,6 @@
          placed in the full Tonika application. It's just a placeholder
          for development purposes.
 
-         PRODUCTION: Replace with an actual piano component or remove entirely.
          ================================================================== -->
     <div class="roll88">
         <div class="piano-placeholder">
@@ -396,10 +386,9 @@
      These scripts handle the tab switching and theme toggling functionality
      for the development demo. They are NOT part of your module.
 
-     PRODUCTION: Remove these scripts when integrating your module.
      ================================================================== -->
 <script>
-    // Handle tab switching in the demo interface
+    // Handle tab switching in the interface
     function openTab(index) {
         const tabs = document.querySelectorAll(".tabs button");
         const sections = document.querySelectorAll(".tab-content section");
@@ -445,7 +434,7 @@
 
      PRODUCTION: This is the main script you'll need in production.
      ================================================================== -->
-<script src="js/ryhthonika.js"></script>
+<script src="js/rhythonika.js"></script>
 
 <script>
     // ===================================================================
@@ -469,13 +458,7 @@
         autoRefresh: true
     });
 
-    // Initialize a second instance for theme testing (optional)
-    // Remove this if you don't need theme testing
-    new Demo({
-        mount: "#theme-test-mount",
-        mode: "card",
-        autoRefresh: true
-    });
+
 </script>
 </body>
 </html>
