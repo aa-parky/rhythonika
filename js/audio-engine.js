@@ -56,15 +56,25 @@ class AudioEngine {
             loadPromises.push(promise);
         }
 
-        await Promise.all(loadPromises);
-        console.log('AudioEngine: All samples loaded successfully');
+        const results = await Promise.all(loadPromises);
+        const successCount = results.filter(result => result).length;
+        const totalCount = results.length;
+
+        if (successCount === totalCount) {
+            console.log('AudioEngine: All samples loaded successfully');
+        } else if (successCount > 0) {
+            console.log(`AudioEngine: ${successCount}/${totalCount} samples loaded successfully`);
+        } else {
+            console.warn('AudioEngine: No samples could be loaded, will use click sounds');
+        }
     }
 
     async _loadSample(sampleType, filename) {
         try {
             const response = await fetch(`./samples/${filename}`);
             if (!response.ok) {
-                throw new Error(`Failed to load ${filename}: ${response.status}`);
+                console.warn(`AudioEngine: Failed to load ${sampleType} (${filename}): HTTP ${response.status}`);
+                return false;
             }
             
             const arrayBuffer = await response.arrayBuffer();
@@ -72,9 +82,11 @@ class AudioEngine {
             
             this.samples.set(sampleType, audioBuffer);
             console.log(`AudioEngine: Loaded ${sampleType} (${filename})`);
+            return true;
         } catch (error) {
-            console.error(`AudioEngine: Failed to load ${sampleType}:`, error);
-            // Fallback to click sound for this sample type
+            console.warn(`AudioEngine: Failed to load ${sampleType} (${filename}):`, error.message);
+            // Don't throw - allow other samples to load and fallback to click sounds
+            return false;
         }
     }
 
@@ -111,8 +123,8 @@ class AudioEngine {
         const gain = this.ctx.createGain();
         
         // Map sound types to frequencies
-        let freq = 1000;
-        let gainLevel = 0.18;
+        let freq;
+        let gainLevel;
         
         switch (soundType) {
             case 'accent':
@@ -209,27 +221,10 @@ class AudioEngine {
     }
 
     // Check if samples are loaded
-    areSamplesLoaded() {
-        return this.samples.size > 0;
-    }
-
-    // Get loading status
-    isLoadingSamples() {
-        return this.isLoading;
-    }
-
-    // Cleanup
-    destroy() {
-        this.samples.clear();
-        this.isLoading = false;
-        this.loadingPromise = null;
-    }
+// Get loading status
+// Cleanup
 }
 
-// Export for module systems or attach to a window for classic scripts
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = AudioEngine;
-} else {
-    window.AudioEngine = AudioEngine;
-}
+// Export for browser globals
+window.AudioEngine = AudioEngine;
 
