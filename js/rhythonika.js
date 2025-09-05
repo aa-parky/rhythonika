@@ -274,7 +274,7 @@ class Rhythonika {
         // Initialize audio context and engine if needed
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.audioEngine = new AudioEngine(this.audioContext);
+            this.audioEngine = new Soundonika.Engine(this.audioContext);
             await this.audioEngine.init();
             this._initAudioUI();
         }
