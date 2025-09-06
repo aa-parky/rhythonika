@@ -1,7 +1,7 @@
 // js/rhythonika.js
 // Tonika module: Rhythonika (smart metronome w/ patterns)
 // BEM root: .rhythonika (inside .tonika-module)
-// Updated with AudioEngine integration
+// Updated with CDN-based Soundonika integration
 
 class Rhythonika {
     constructor(opts = {}) {
@@ -15,10 +15,21 @@ class Rhythonika {
         this.currentStep = 0;
         this.intervalId = null;
         this.audioContext = null;
-        this.audioEngine = null; // NEW: AudioEngine instance
+        this.audioEngine = null;
         this.nextNoteTime = 0.0;
         this.lookahead = 25.0;         // ms (UI timer)
         this.scheduleAheadTime = 0.1;  // seconds (audio clock window)
+
+        // ---- Sound type configuration ----
+        this.soundTypes = {
+            accent: 'kick',         // Strong beats
+            normal: 'hihat_closed', // Weak beats
+            polyA: 'kick',          // Polyrhythm grid A
+            polyB: 'snare'          // Polyrhythm grid B
+        };
+
+        // ---- CDN Configuration ----
+        this.soundonikaCDN = 'https://cdn.jsdelivr.net/gh/aa-parky/soundonika/js/soundonika.js';
 
         // ---- Patterns (grid-based, except polyrhythm which is dual grid) ----
         // accents: 1 = strong, 0 = weak (for simple single-grid patterns)
@@ -44,6 +55,38 @@ class Rhythonika {
         this._render();
         this._bindUI();
         this._renderPills(); // initial
+    }
+
+    // ---------- CDN Loading ----------
+    async _loadSoundonika() {
+        if (window.Soundonika) {
+            return window.Soundonika;
+        }
+
+        try {
+            this._updateStatus("Loading audio engine...");
+
+            const script = document.createElement('script');
+            script.src = this.soundonikaCDN;
+            script.async = true;
+
+            return new Promise((resolve, reject) => {
+                script.onload = () => {
+                    if (window.Soundonika) {
+                        this._updateStatus("Audio engine loaded");
+                        resolve(window.Soundonika);
+                    } else {
+                        reject(new Error('Soundonika failed to load'));
+                    }
+                };
+                script.onerror = () => reject(new Error('Failed to load Soundonika from CDN'));
+                document.head.appendChild(script);
+            });
+        } catch (error) {
+            console.error('Failed to load Soundonika:', error);
+            this._updateStatus("Failed to load audio engine");
+            throw error;
+        }
     }
 
     // ---------- Render ----------
@@ -105,7 +148,7 @@ class Rhythonika {
         </div>
         
         <div class="rhythonika__status">
-          <span class="rhythonika__status-text"></span>
+          <span class="rhythonika__status-text">Ready</span>
         </div>
       </div>
 
@@ -140,7 +183,7 @@ class Rhythonika {
         this.pillsWrap     = this.root.querySelector(".rhythonika__pills");
         this.legend        = this.root.querySelector(".rhythonika__legend");
 
-        // NEW: Audio control elements
+        // Audio control elements
         this.selectSoundMode = this.root.querySelector(".rhythonika__sound-mode");
         this.inputVolume     = this.root.querySelector(".rhythonika__volume");
         this.statusText      = this.root.querySelector(".rhythonika__status-text");
@@ -170,16 +213,16 @@ class Rhythonika {
             if (this.isPlaying) this._reprimeClock();
         });
 
-        // NEW: Audio control handlers
+        // Audio control handlers
         this.selectSoundMode.addEventListener("change", async () => {
             if (this.audioEngine) {
-                this._updateStatus("Loading...");
+                this._updateStatus("Switching sound mode...");
                 try {
-                    await this.audioEngine.setSoundMode(this.selectSoundMode.value);
-                    this._updateStatus(this.selectSoundMode.value === 'samples' ? "Samples loaded" : "Click sounds");
+                    this.audioEngine.setSoundMode(this.selectSoundMode.value);
+                    this._updateStatus(this.selectSoundMode.value === 'samples' ? "Using drum samples" : "Using click sounds");
                 } catch (error) {
                     console.error("Failed to change sound mode:", error);
-                    this._updateStatus("Error loading samples");
+                    this._updateStatus("Error changing sound mode");
                 }
             }
         });
@@ -192,28 +235,24 @@ class Rhythonika {
 
         // Space toggles transport for quick UX
         this._keyHandler = (e) => {
-            if (e.code === "Space") {
+            if (e.code === "Space" && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
                 e.preventDefault();
                 this.isPlaying ? this.stop() : this.start();
             }
         };
         window.addEventListener("keydown", this._keyHandler);
-
-        // Initialize audio controls UI
-        this._initAudioUI();
     }
 
-    // NEW: Initialize audio control UI state
+    // Initialize audio control UI state
     _initAudioUI() {
-        // Set initial sound mode selection
         if (this.audioEngine) {
             this.selectSoundMode.value = this.audioEngine.getSoundMode();
             this.inputVolume.value = this.audioEngine.getVolume();
-            this._updateStatus(this.audioEngine.getSoundMode() === 'samples' ? "Ready" : "Click sounds");
+            this._updateStatus(this.audioEngine.getSoundMode() === 'samples' ? "Ready with samples" : "Ready with clicks");
         }
     }
 
-    // NEW: Update status text
+    // Update status text
     _updateStatus(text) {
         if (this.statusText) {
             this.statusText.textContent = text;
@@ -269,31 +308,44 @@ class Rhythonika {
     }
 
     // ---------- Audio scheduling ----------
-    webkitAudioContext;
     async start() {
-        // Initialize audio context and engine if needed
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.audioEngine = new Soundonika.Engine(this.audioContext);
-            await this.audioEngine.init();
-            this._initAudioUI();
-        }
+        try {
+            // Load Soundonika if needed
+            if (!window.Soundonika) {
+                await this._loadSoundonika();
+            }
 
-        this.isPlaying = true;
-        this.root.classList.add("rhythonika--playing");
-        this.btnStartStop.textContent = "Stop";
-        this.currentStep = 0;
-        this._reprimeClock();
+            // Initialize audio context and engine if needed
+            if (!this.audioContext) {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.audioEngine = new window.Soundonika.Engine(this.audioContext);
+                this._updateStatus("Initializing audio engine...");
+                await this.audioEngine.init();
+                this._initAudioUI();
+            }
 
-        // Visual metering (requestAnimationFrame loop)
-        const raf = () => {
-            if (!this.isPlaying) return;
-            // For grid patterns only (pills)
-            const pat = this.patterns[this.selectedPatternKey];
-            if (pat && pat.kind === "grid") this._highlightPill(this.currentStep);
+            this.isPlaying = true;
+            this.root.classList.add("rhythonika--playing");
+            this.btnStartStop.textContent = "Stop";
+            this.currentStep = 0;
+            this._reprimeClock();
+            this._updateStatus("Playing");
+
+            // Visual metering (requestAnimationFrame loop)
+            const raf = () => {
+                if (!this.isPlaying) return;
+                // For grid patterns only (pills)
+                const pat = this.patterns[this.selectedPatternKey];
+                if (pat && pat.kind === "grid") this._highlightPill(this.currentStep);
+                this._rafId = requestAnimationFrame(raf);
+            };
             this._rafId = requestAnimationFrame(raf);
-        };
-        this._rafId = requestAnimationFrame(raf);
+
+        } catch (error) {
+            console.error('Failed to start Rhythonika:', error);
+            this._updateStatus("Failed to start - check console");
+            return;
+        }
     }
 
     stop() {
@@ -302,6 +354,12 @@ class Rhythonika {
         this.btnStartStop.textContent = "Start";
         if (this.intervalId) clearInterval(this.intervalId);
         if (this._rafId) cancelAnimationFrame(this._rafId);
+
+        if (this.audioEngine) {
+            this._updateStatus(this.audioEngine.getSoundMode() === 'samples' ? "Ready with samples" : "Ready with clicks");
+        } else {
+            this._updateStatus("Ready");
+        }
     }
 
     _reprimeClock() {
@@ -329,10 +387,15 @@ class Rhythonika {
 
             const isAccent = !!pat.accents[this.currentStep % pat.slotsPerBar];
 
-            // NEW: Use AudioEngine instead of direct scheduling
-            const soundType = isAccent ? 'accent' : 'normal';
+            // Use configured sound types
+            const soundType = this.soundTypes[isAccent ? 'accent' : 'normal'];
             const velocity = isAccent ? 1.0 : 0.7;
-            this.audioEngine.scheduleSound(this.nextNoteTime, soundType, velocity);
+
+            try {
+                this.audioEngine.scheduleSound(this.nextNoteTime, soundType, velocity);
+            } catch (error) {
+                console.error('Failed to schedule sound:', error);
+            }
 
             this.nextNoteTime += slotDur;
             this.currentStep = (this.currentStep + 1) % pat.slotsPerBar;
@@ -346,13 +409,17 @@ class Rhythonika {
             const tickDur = barDur / lcmTicks;
             const tick = this.currentStep % lcmTicks;
 
-            // If tick aligns with A grid (use kick sound)
-            if (tick % (lcmTicks / pat.gridA.count) === 0) {
-                this.audioEngine.scheduleSound(this.nextNoteTime, 'kick', pat.gridA.gain / 0.28);
-            }
-            // If tick aligns with B grid (use snare sound)
-            if (tick % (lcmTicks / pat.gridB.count) === 0) {
-                this.audioEngine.scheduleSound(this.nextNoteTime, 'snare', pat.gridB.gain / 0.28);
+            try {
+                // If tick aligns with A grid
+                if (tick % (lcmTicks / pat.gridA.count) === 0) {
+                    this.audioEngine.scheduleSound(this.nextNoteTime, this.soundTypes.polyA, pat.gridA.gain / 0.28);
+                }
+                // If tick aligns with B grid
+                if (tick % (lcmTicks / pat.gridB.count) === 0) {
+                    this.audioEngine.scheduleSound(this.nextNoteTime, this.soundTypes.polyB, pat.gridB.gain / 0.28);
+                }
+            } catch (error) {
+                console.error('Failed to schedule polyrhythm sound:', error);
             }
 
             this.nextNoteTime += tickDur;
@@ -365,7 +432,20 @@ class Rhythonika {
         return Math.abs(a * b) / gcd(a, b);
     }
 
-    // ---------- Lifecycle ----------
+    // ---------- Cleanup ----------
+    destroy() {
+        if (this._keyHandler) {
+            window.removeEventListener("keydown", this._keyHandler);
+        }
+        this.stop();
+        if (this.audioEngine) {
+            // Soundonika doesn't have a destroy method, but we can clean up references
+            this.audioEngine = null;
+        }
+        if (this.audioContext) {
+            this.audioContext.close();
+        }
+    }
 }
 
 // Attach to a Tonika registry on window for classic scripts
