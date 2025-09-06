@@ -1,7 +1,7 @@
 // js/rhythonika.js
 // Tonika module: Rhythonika (smart metronome w/ patterns)
 // BEM root: .rhythonika (inside .tonika-module)
-// Updated with CDN-based Soundonika integration and intelligent sample path detection
+// Updated with local sample support and click fallback
 
 class Rhythonika {
     constructor(opts = {}) {
@@ -28,17 +28,11 @@ class Rhythonika {
             polyB: 'snare'          // Polyrhythm grid B
         };
 
-        // ---- CDN Configuration ----
-        this.soundonikaCDN = 'https://cdn.jsdelivr.net/gh/aa-parky/soundonika/js/soundonika.js';
+        // ---- CDN Configuration (Soundonika only) ----
+        this.soundonikaCDN = opts.soundonikaCDN || 'https://cdn.jsdelivr.net/gh/aa-parky/soundonika@8d46682/js/soundonika.js';
 
-        // ---- Sample Path Candidates ----
-        this.samplePathCandidates = [
-            './samples',                                                    // Tonika frontend (most common)
-            '../samples',                                                   // Local Soundonika development
-            '../../samples',                                               // Alternative local structure
-            'https://cdn.jsdelivr.net/gh/aa-parky/tonika/samples',        // Tonika CDN
-            'https://cdn.jsdelivr.net/gh/aa-parky/soundonika@8d46682/js/soundonika.js'     // Soundonika CDN fallback
-        ];
+        // ---- Local Sample Path ----
+        this.samplePath = './samples';  // Local samples directory
 
         // ---- Patterns (grid-based, except polyrhythm which is dual grid) ----
         // accents: 1 = strong, 0 = weak (for simple single-grid patterns)
@@ -66,7 +60,7 @@ class Rhythonika {
         this._renderPills(); // initial
     }
 
-    // ---------- CDN Loading ----------
+    // ---------- CDN Loading (Soundonika only) ----------
     async _loadSoundonika() {
         if (window.Soundonika) {
             return window.Soundonika;
@@ -98,26 +92,23 @@ class Rhythonika {
         }
     }
 
-    // ---------- Sample Path Detection ----------
-    async _detectSamplePath() {
-        this._updateStatus("Detecting sample location...");
-
-        for (const path of this.samplePathCandidates) {
-            try {
-                console.log(`Trying sample path: ${path}`);
-                const response = await fetch(`${path}/sample-index.json`);
-                if (response.ok) {
-                    console.log(`✅ Found samples at: ${path}`);
-                    const pathType = path.includes('http') ? 'CDN' : 'local';
-                    this._updateStatus(`Found samples (${pathType})`);
-                    return path;
-                }
-            } catch (error) {
-                console.log(`❌ Sample path failed: ${path} - ${error.message}`);
+    // ---------- Simple Sample Check ----------
+    async _checkLocalSamples() {
+        try {
+            this._updateStatus("Checking for local samples...");
+            const response = await fetch(`${this.samplePath}/sample-index.json`);
+            if (response.ok) {
+                console.log(`✅ Found local samples at: ${this.samplePath}`);
+                this._updateStatus("Local samples available");
+                return true;
             }
+        } catch (error) {
+            console.log(`❌ Local samples not found: ${error.message}`);
         }
 
-        throw new Error('No sample source found. Please ensure samples are available.');
+        console.log('⚠️ No local samples found, will use click sounds');
+        this._updateStatus("Using click sounds (no samples)");
+        return false;
     }
 
     // ---------- Render ----------
@@ -350,28 +341,32 @@ class Rhythonika {
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-                // Create engine WITHOUT samples initially
-                this.audioEngine = new window.Soundonika.Engine(this.audioContext);
+                // Create engine with local sample path
+                this.audioEngine = new window.Soundonika.Engine(this.audioContext, {
+                    sampleBasePath: this.samplePath
+                });
 
-                // Detect and configure sample path BEFORE initialization
-                try {
-                    const samplePath = await this._detectSamplePath();
-                    // NOTE: This requires Soundonika to have setSampleBasePath method
-                    if (this.audioEngine.setSampleBasePath) {
-                        this.audioEngine.setSampleBasePath(samplePath);
-                    } else {
-                        console.warn('Soundonika does not support setSampleBasePath - samples may not load');
-                    }
-                } catch (error) {
-                    console.warn('Sample detection failed, using click sounds only:', error);
-                    this._updateStatus("Samples unavailable - using click sounds");
-                    // Force click mode if samples can't be found
+                // Check if local samples are available
+                const hasLocalSamples = await this._checkLocalSamples();
+
+                if (!hasLocalSamples) {
+                    // Force click mode if no local samples
                     this.selectSoundMode.value = 'clicks';
+                    this.audioEngine.setSoundMode('clicks');
                 }
 
                 this._updateStatus("Initializing audio engine...");
-                await this.audioEngine.init();
-                this._initAudioUI();
+
+                try {
+                    await this.audioEngine.init();
+                    this._initAudioUI();
+                } catch (error) {
+                    console.warn('Sample initialization failed, falling back to click sounds:', error);
+                    this.selectSoundMode.value = 'clicks';
+                    this.audioEngine.setSoundMode('clicks');
+                    await this.audioEngine.init();
+                    this._updateStatus("Using click sounds (sample load failed)");
+                }
             }
 
             this.isPlaying = true;
