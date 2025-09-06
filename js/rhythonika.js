@@ -1,7 +1,7 @@
 // js/rhythonika.js
 // Tonika module: Rhythonika (smart metronome w/ patterns)
 // BEM root: .rhythonika (inside .tonika-module)
-// Updated with CDN-based Soundonika integration
+// Updated with CDN-based Soundonika integration and intelligent sample path detection
 
 class Rhythonika {
     constructor(opts = {}) {
@@ -30,6 +30,15 @@ class Rhythonika {
 
         // ---- CDN Configuration ----
         this.soundonikaCDN = 'https://cdn.jsdelivr.net/gh/aa-parky/soundonika/js/soundonika.js';
+
+        // ---- Sample Path Candidates ----
+        this.samplePathCandidates = [
+            './samples',                                                    // Tonika frontend (most common)
+            '../samples',                                                   // Local Soundonika development
+            '../../samples',                                               // Alternative local structure
+            'https://cdn.jsdelivr.net/gh/aa-parky/tonika/samples',        // Tonika CDN
+            'https://cdn.jsdelivr.net/gh/aa-parky/soundonika@8d46682/js/soundonika.js'     // Soundonika CDN fallback
+        ];
 
         // ---- Patterns (grid-based, except polyrhythm which is dual grid) ----
         // accents: 1 = strong, 0 = weak (for simple single-grid patterns)
@@ -87,6 +96,28 @@ class Rhythonika {
             this._updateStatus("Failed to load audio engine");
             throw error;
         }
+    }
+
+    // ---------- Sample Path Detection ----------
+    async _detectSamplePath() {
+        this._updateStatus("Detecting sample location...");
+
+        for (const path of this.samplePathCandidates) {
+            try {
+                console.log(`Trying sample path: ${path}`);
+                const response = await fetch(`${path}/sample-index.json`);
+                if (response.ok) {
+                    console.log(`✅ Found samples at: ${path}`);
+                    const pathType = path.includes('http') ? 'CDN' : 'local';
+                    this._updateStatus(`Found samples (${pathType})`);
+                    return path;
+                }
+            } catch (error) {
+                console.log(`❌ Sample path failed: ${path} - ${error.message}`);
+            }
+        }
+
+        throw new Error('No sample source found. Please ensure samples are available.');
     }
 
     // ---------- Render ----------
@@ -318,7 +349,26 @@ class Rhythonika {
             // Initialize audio context and engine if needed
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Create engine WITHOUT samples initially
                 this.audioEngine = new window.Soundonika.Engine(this.audioContext);
+
+                // Detect and configure sample path BEFORE initialization
+                try {
+                    const samplePath = await this._detectSamplePath();
+                    // NOTE: This requires Soundonika to have setSampleBasePath method
+                    if (this.audioEngine.setSampleBasePath) {
+                        this.audioEngine.setSampleBasePath(samplePath);
+                    } else {
+                        console.warn('Soundonika does not support setSampleBasePath - samples may not load');
+                    }
+                } catch (error) {
+                    console.warn('Sample detection failed, using click sounds only:', error);
+                    this._updateStatus("Samples unavailable - using click sounds");
+                    // Force click mode if samples can't be found
+                    this.selectSoundMode.value = 'clicks';
+                }
+
                 this._updateStatus("Initializing audio engine...");
                 await this.audioEngine.init();
                 this._initAudioUI();
